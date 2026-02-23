@@ -1,0 +1,23 @@
+{
+  "name": "Reel Script App",
+  "short_name": "Reel Script",
+  "description": "リール動画の台本作成・管理アプリ",
+  "start_url": "/reel-script-app/",
+  "scope": "/reel-script-app/",
+  "display": "standalone",
+  "background_color": "#030712",
+  "theme_color": "#1e1b4b",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
