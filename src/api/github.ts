@@ -40,10 +40,10 @@ function buildMarkdown(script: Script): string {
     "scenes:",
   ];
   for (const scene of script.scenes) {
-    yamlLines.push(`  - text: "${scene.text}"`);
+    yamlLines.push(`  - text: ${JSON.stringify(scene.text)}`);
     yamlLines.push(`    expression: ${scene.expression}`);
     if (scene.emphasis.length > 0) {
-      yamlLines.push(`    emphasis: [${scene.emphasis.map((e) => `"${e}"`).join(", ")}]`);
+      yamlLines.push(`    emphasis: [${scene.emphasis.map((e) => JSON.stringify(e)).join(", ")}]`);
     }
     if (scene.overlay) {
       yamlLines.push(`    overlay: ${scene.overlay}`);
@@ -51,7 +51,7 @@ function buildMarkdown(script: Script): string {
   }
   if (script.cta) {
     yamlLines.push("cta:");
-    yamlLines.push(`  text: "${script.cta.text}"`);
+    yamlLines.push(`  text: ${JSON.stringify(script.cta.text)}`);
     yamlLines.push(`  expression: ${script.cta.expression}`);
   }
 
@@ -77,7 +77,7 @@ export async function saveToObsidian(script: Script): Promise<string> {
   const content = buildMarkdown(script);
   const encoded = btoa(unescape(encodeURIComponent(content)));
 
-  const apiUrl = `https://api.github.com/repos/${githubRepo}/contents/${encodeURIComponent(filePath)}`;
+  const apiUrl = `https://api.github.com/repos/${githubRepo}/contents/${filePath.split("/").map(encodeURIComponent).join("/")}`;
 
   // Check if file exists (to get sha for update)
   let sha: string | undefined;

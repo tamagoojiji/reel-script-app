@@ -59,6 +59,13 @@ export default function ScriptEditorPage() {
     }
   }, [id, isNew]);
 
+  // Interval cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
+
   const save = useCallback(() => {
     const scripts = loadScripts();
     const now = new Date().toISOString();
