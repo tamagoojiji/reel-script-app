@@ -6,8 +6,17 @@ interface AppConfig {
   githubRepo: string;
 }
 
+function detectDefaultApiUrl(): string {
+  if (typeof window === "undefined") return "http://localhost:3002";
+  // /app/ パスから配信されている場合は同一オリジン
+  if (window.location.pathname.startsWith("/app")) {
+    return window.location.origin;
+  }
+  return "http://localhost:3002";
+}
+
 const DEFAULT_CONFIG: AppConfig = {
-  apiUrl: "http://localhost:3002",
+  apiUrl: "",
   githubToken: "",
   githubRepo: "tamagoojiji/USJ-Knowledge",
 };
@@ -26,5 +35,7 @@ export function saveConfig(config: Partial<AppConfig>): void {
 }
 
 export function getApiUrl(): string {
-  return getConfig().apiUrl;
+  const config = getConfig();
+  if (!config.apiUrl) return detectDefaultApiUrl();
+  return config.apiUrl;
 }
