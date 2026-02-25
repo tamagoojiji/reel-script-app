@@ -4,6 +4,7 @@ interface AppConfig {
   apiUrl: string;
   githubToken: string;
   githubRepo: string;
+  gasUrl: string;
 }
 
 function detectDefaultApiUrl(): string {
@@ -19,7 +20,26 @@ const DEFAULT_CONFIG: AppConfig = {
   apiUrl: "",
   githubToken: "",
   githubRepo: "tamagoojiji/USJ-Knowledge",
+  gasUrl: "",
 };
+
+// 旧 script-creator-app のキーからマイグレーション
+function migrateGasUrl(): void {
+  const OLD_KEY = "script-creator-gas-url";
+  const oldUrl = localStorage.getItem(OLD_KEY);
+  if (oldUrl) {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      const current = raw ? JSON.parse(raw) : {};
+      if (!current.gasUrl) {
+        current.gasUrl = oldUrl;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
+      }
+    } catch { /* ignore */ }
+    localStorage.removeItem(OLD_KEY);
+  }
+}
+migrateGasUrl();
 
 export function getConfig(): AppConfig {
   try {
@@ -38,4 +58,8 @@ export function getApiUrl(): string {
   const config = getConfig();
   if (!config.apiUrl) return detectDefaultApiUrl();
   return config.apiUrl;
+}
+
+export function getGasUrl(): string {
+  return getConfig().gasUrl;
 }
