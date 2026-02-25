@@ -1,5 +1,5 @@
 import { getGasUrl } from "../config";
-import type { GasResponse, QuestionsResponse, TemplateType, TargetPlatform } from "../types";
+import type { GasResponse, QuestionsResponse, Script, TemplateType, TargetPlatform } from "../types";
 
 async function gasPost(url: string, payload: object): Promise<Response> {
   return fetch(url, {
@@ -90,6 +90,74 @@ export async function generateEmpathyScript(
   const data: GasResponse = await res.json();
   if (!data.ok) {
     throw new Error(data.error || "台本生成に失敗しました");
+  }
+
+  return data;
+}
+
+export async function syncSaveScripts(scripts: Script[]): Promise<{ ok: boolean; count?: number }> {
+  const url = getGasUrl();
+  if (!url) {
+    throw new Error("GAS URLが設定されていません。設定画面でURLを入力してください。");
+  }
+
+  const res = await gasPost(url, {
+    action: "sync-save",
+    scripts,
+  });
+
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  }
+
+  const data = await res.json();
+  if (!data.ok) {
+    throw new Error(data.error || "保存に失敗しました");
+  }
+
+  return data;
+}
+
+export async function syncLoadScripts(): Promise<{ ok: boolean; scripts: Script[] }> {
+  const url = getGasUrl();
+  if (!url) {
+    throw new Error("GAS URLが設定されていません。設定画面でURLを入力してください。");
+  }
+
+  const res = await gasPost(url, {
+    action: "sync-load",
+  });
+
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  }
+
+  const data = await res.json();
+  if (!data.ok) {
+    throw new Error(data.error || "読み込みに失敗しました");
+  }
+
+  return data;
+}
+
+export async function syncDeleteScript(id: string): Promise<{ ok: boolean }> {
+  const url = getGasUrl();
+  if (!url) {
+    throw new Error("GAS URLが設定されていません。設定画面でURLを入力してください。");
+  }
+
+  const res = await gasPost(url, {
+    action: "sync-delete",
+    id,
+  });
+
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  }
+
+  const data = await res.json();
+  if (!data.ok) {
+    throw new Error(data.error || "削除に失敗しました");
   }
 
   return data;

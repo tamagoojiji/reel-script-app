@@ -5,6 +5,8 @@ import SceneCard from "../components/SceneCard";
 import PipelineStatus from "../components/PipelineStatus";
 import { generateV2, getGenerateStatus } from "../api/reelEditor";
 import { saveToObsidian } from "../api/github";
+import { syncSaveScripts } from "../api/gasApi";
+import { getGasUrl } from "../config";
 
 const SCRIPTS_KEY = "reel-scripts";
 
@@ -16,8 +18,11 @@ function loadScripts(): Script[] {
   }
 }
 
-function saveScripts(scripts: Script[]): void {
+function saveScriptsAndSync(scripts: Script[]): void {
   localStorage.setItem(SCRIPTS_KEY, JSON.stringify(scripts));
+  if (getGasUrl()) {
+    syncSaveScripts(scripts).catch(() => {});
+  }
 }
 
 function newScene(): ScriptScene {
@@ -84,7 +89,7 @@ export default function ScriptEditorPage() {
     } else {
       scripts.push(script);
     }
-    saveScripts(scripts);
+    saveScriptsAndSync(scripts);
     return script;
   }, [scriptId, name, preset, scenes, ctaText, ctaExpression]);
 

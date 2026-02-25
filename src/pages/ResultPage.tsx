@@ -2,6 +2,8 @@ import { useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import ScriptPreview from "../components/ScriptPreview";
 import YamlViewer from "../components/YamlViewer";
+import { syncSaveScripts } from "../api/gasApi";
+import { getGasUrl } from "../config";
 import type { HistoryItem, Script, ScriptScene } from "../types";
 
 export default function ResultPage() {
@@ -62,6 +64,10 @@ export default function ResultPage() {
     } catch { /* ignore */ }
     existing.push(reelScript);
     localStorage.setItem(key, JSON.stringify(existing));
+
+    if (getGasUrl()) {
+      syncSaveScripts(existing).catch(() => {});
+    }
 
     navigate("/editor/" + reelScript.id);
   };
