@@ -11,8 +11,8 @@ export default function BottomNav() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // ResultPage では非表示
-  if (location.pathname.startsWith("/create/result")) {
+  // ResultPage, QuestionsPage では非表示
+  if (location.pathname.startsWith("/create/result") || location.pathname === "/create/questions") {
     return null;
   }
 

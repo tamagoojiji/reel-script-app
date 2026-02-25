@@ -105,12 +105,25 @@ export const PERSONALITY_COLORS: Record<PersonalityType, string> = {
   Sun: "bg-amber-500/20 text-amber-300 border-amber-500/30",
 };
 
-export type TemplateType = "prep" | "aida";
+export type TemplateType = "prep" | "aida" | "empathy";
 
 export const TEMPLATE_INFO: Record<TemplateType, { name: string; description: string }> = {
   prep: { name: "PREP型", description: "結論先出し（20-30秒・攻略系）" },
   aida: { name: "AIDA型", description: "感情訴求（30-60秒・体験レポート）" },
+  empathy: { name: "EMPATHY型", description: "失敗共感→情報→感情（50-60秒）" },
 };
+
+export interface GasQuestion {
+  id: number;
+  question: string;
+  purpose: string;
+}
+
+export interface QuestionsResponse {
+  ok: boolean;
+  questions?: GasQuestion[];
+  error?: string;
+}
 
 export type TargetPlatform = "リール" | "ストーリーズ" | "Threads" | "X";
 

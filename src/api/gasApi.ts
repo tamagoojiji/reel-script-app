@@ -1,5 +1,5 @@
 import { getGasUrl } from "../config";
-import type { GasResponse, TemplateType, TargetPlatform } from "../types";
+import type { GasResponse, QuestionsResponse, TemplateType, TargetPlatform } from "../types";
 
 async function gasPost(url: string, payload: object): Promise<Response> {
   return fetch(url, {
@@ -25,6 +25,62 @@ export async function generateScript(
     transcript,
     template,
     targets,
+  });
+
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  }
+
+  const data: GasResponse = await res.json();
+  if (!data.ok) {
+    throw new Error(data.error || "台本生成に失敗しました");
+  }
+
+  return data;
+}
+
+export async function generateQuestions(
+  transcript: string,
+  targets: TargetPlatform[]
+): Promise<QuestionsResponse> {
+  const url = getGasUrl();
+  if (!url) {
+    throw new Error("GAS URLが設定されていません。設定画面でURLを入力してください。");
+  }
+
+  const res = await gasPost(url, {
+    action: "generate-questions",
+    transcript,
+    targets,
+  });
+
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  }
+
+  const data: QuestionsResponse = await res.json();
+  if (!data.ok) {
+    throw new Error(data.error || "質問生成に失敗しました");
+  }
+
+  return data;
+}
+
+export async function generateEmpathyScript(
+  transcript: string,
+  targets: TargetPlatform[],
+  answers: { question: string; answer: string }[]
+): Promise<GasResponse> {
+  const url = getGasUrl();
+  if (!url) {
+    throw new Error("GAS URLが設定されていません。設定画面でURLを入力してください。");
+  }
+
+  const res = await gasPost(url, {
+    action: "generate-empathy",
+    transcript,
+    targets,
+    answers,
   });
 
   if (!res.ok) {

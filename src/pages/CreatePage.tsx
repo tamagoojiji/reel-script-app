@@ -23,6 +23,12 @@ export default function CreatePage() {
       return;
     }
 
+    // EMPATHY型は質問ページへ遷移
+    if (template === "empathy") {
+      navigate("/create/questions", { state: { transcript, targets } });
+      return;
+    }
+
     setLoading(true);
     setError("");
 
@@ -67,6 +73,8 @@ export default function CreatePage() {
             <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
             生成中...（30秒ほどかかります）
           </span>
+        ) : template === "empathy" ? (
+          "質問を生成する"
         ) : (
           "台本を生成する"
         )}
