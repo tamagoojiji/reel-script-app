@@ -86,7 +86,7 @@ export default function ResultPage() {
         onClick={handleOpenInEditor}
         className="w-full py-3 rounded-xl font-bold bg-emerald-600 text-white hover:bg-emerald-500 active:bg-emerald-700"
       >
-        編集する
+        リール編集へ
       </button>
 
       <button
