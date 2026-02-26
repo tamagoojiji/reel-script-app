@@ -145,10 +145,12 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 }
 
 /**
- * 背景ファイルを remotion リポの public/bg/ に GitHub Contents API でアップロード
+ * 背景ファイルを remotion リポの public/bg/ に Git Data API でアップロード
+ * （Contents APIはサイズ制限が厳しいため、Blobs APIを使用 → 最大100MB対応）
  * 戻り値: "bg/{safeName}"（remotion の public/ 相対パス）
  */
 const REMOTION_REPO = "tamagoojiji/remotion";
+const BRANCH = "main";
 
 export async function uploadBackgroundToGitHub(file: File): Promise<string> {
   const { githubToken } = getConfig();
@@ -164,38 +166,65 @@ export async function uploadBackgroundToGitHub(file: File): Promise<string> {
     .replace(/_+/g, "_");
 
   const filePath = `public/bg/${safeName}`;
-  const apiUrl = `${API}/repos/${REMOTION_REPO}/contents/${filePath}`;
+  const repoApi = `${API}/repos/${REMOTION_REPO}`;
+  const h = { ...headers(), "Content-Type": "application/json" };
 
-  // 既存ファイルの sha を取得（上書き対応）
-  let sha: string | undefined;
-  try {
-    const check = await fetch(apiUrl, { headers: headers() });
-    if (check.ok) {
-      const existing = await check.json();
-      sha = existing.sha;
-    }
-  } catch {}
-
-  // ファイル内容を base64 に変換
+  // 1. Blob作成（base64で大容量ファイル対応）
   const buffer = await file.arrayBuffer();
   const content = arrayBufferToBase64(buffer);
 
-  const body: Record<string, string> = {
-    message: `add: background ${safeName}`,
-    content,
-  };
-  if (sha) body.sha = sha;
-
-  const res = await fetch(apiUrl, {
-    method: "PUT",
-    headers: { ...headers(), "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+  const blobRes = await fetch(`${repoApi}/git/blobs`, {
+    method: "POST",
+    headers: h,
+    body: JSON.stringify({ content, encoding: "base64" }),
   });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(`背景アップロード失敗: ${(err as any).message || res.statusText}`);
+  if (!blobRes.ok) {
+    const err = await blobRes.json().catch(() => ({}));
+    throw new Error(`Blob作成失敗: ${(err as any).message || blobRes.statusText}`);
   }
+  const blobSha = (await blobRes.json()).sha;
+
+  // 2. 現在のブランチのコミットSHA・ツリーSHAを取得
+  const refRes = await fetch(`${repoApi}/git/ref/heads/${BRANCH}`, { headers: headers() });
+  if (!refRes.ok) throw new Error("ブランチ情報の取得に失敗しました");
+  const commitSha = (await refRes.json()).object.sha;
+
+  const commitRes = await fetch(`${repoApi}/git/commits/${commitSha}`, { headers: headers() });
+  if (!commitRes.ok) throw new Error("コミット情報の取得に失敗しました");
+  const treeSha = (await commitRes.json()).tree.sha;
+
+  // 3. 新しいツリーを作成（ファイルを追加）
+  const treeRes = await fetch(`${repoApi}/git/trees`, {
+    method: "POST",
+    headers: h,
+    body: JSON.stringify({
+      base_tree: treeSha,
+      tree: [{ path: filePath, mode: "100644", type: "blob", sha: blobSha }],
+    }),
+  });
+  if (!treeRes.ok) throw new Error("ツリー作成に失敗しました");
+  const newTreeSha = (await treeRes.json()).sha;
+
+  // 4. 新しいコミットを作成
+  const newCommitRes = await fetch(`${repoApi}/git/commits`, {
+    method: "POST",
+    headers: h,
+    body: JSON.stringify({
+      message: `add: background ${safeName}`,
+      tree: newTreeSha,
+      parents: [commitSha],
+    }),
+  });
+  if (!newCommitRes.ok) throw new Error("コミット作成に失敗しました");
+  const newCommitSha = (await newCommitRes.json()).sha;
+
+  // 5. ブランチを更新
+  const updateRes = await fetch(`${repoApi}/git/refs/heads/${BRANCH}`, {
+    method: "PATCH",
+    headers: h,
+    body: JSON.stringify({ sha: newCommitSha }),
+  });
+  if (!updateRes.ok) throw new Error("ブランチ更新に失敗しました");
 
   return `bg/${safeName}`;
 }
