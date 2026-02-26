@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import VoiceInput from "../components/VoiceInput";
-import { generateQuestions, generateEmpathyScript } from "../api/gasApi";
-import type { GasQuestion, TargetPlatform, GeneratedScript } from "../types";
+import { generateQuestions, generateEmpathyScript, syncSaveHistory } from "../api/gasApi";
+import { getGasUrl } from "../config";
+import type { GasQuestion, HistoryItem, TargetPlatform, GeneratedScript } from "../types";
 
 interface LocationState {
   transcript: string;
@@ -154,5 +155,10 @@ function saveToHistory(
   });
   if (history.length > 20) history.length = 20;
   localStorage.setItem(key, JSON.stringify(history));
+
+  if (getGasUrl()) {
+    syncSaveHistory(history as HistoryItem[]).catch(() => {});
+  }
+
   return id;
 }

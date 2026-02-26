@@ -3,9 +3,9 @@ import { useNavigate } from "react-router-dom";
 import VoiceInput from "../components/VoiceInput";
 import TemplateSelector from "../components/TemplateSelector";
 import TargetCheckbox from "../components/TargetCheckbox";
-import { generateScript } from "../api/gasApi";
+import { generateScript, syncSaveHistory } from "../api/gasApi";
 import { getGasUrl } from "../config";
-import type { TemplateType, TargetPlatform, GeneratedScript } from "../types";
+import type { HistoryItem, TemplateType, TargetPlatform, GeneratedScript } from "../types";
 
 export default function CreatePage() {
   const navigate = useNavigate();
@@ -105,5 +105,10 @@ function saveToHistory(
   });
   if (history.length > 20) history.length = 20;
   localStorage.setItem(key, JSON.stringify(history));
+
+  if (getGasUrl()) {
+    syncSaveHistory(history as HistoryItem[]).catch(() => {});
+  }
+
   return id;
 }

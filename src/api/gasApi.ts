@@ -1,5 +1,5 @@
 import { getGasUrl } from "../config";
-import type { GasResponse, QuestionsResponse, Script, TemplateType, TargetPlatform } from "../types";
+import type { GasResponse, HistoryItem, QuestionsResponse, Script, TemplateType, TargetPlatform } from "../types";
 
 async function gasPost(url: string, payload: object): Promise<Response> {
   return fetch(url, {
@@ -158,6 +158,51 @@ export async function syncDeleteScript(id: string): Promise<{ ok: boolean }> {
   const data = await res.json();
   if (!data.ok) {
     throw new Error(data.error || "削除に失敗しました");
+  }
+
+  return data;
+}
+
+export async function syncSaveHistory(history: HistoryItem[]): Promise<{ ok: boolean; count?: number }> {
+  const url = getGasUrl();
+  if (!url) {
+    throw new Error("GAS URLが設定されていません。設定画面でURLを入力してください。");
+  }
+
+  const res = await gasPost(url, {
+    action: "sync-history-save",
+    history,
+  });
+
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  }
+
+  const data = await res.json();
+  if (!data.ok) {
+    throw new Error(data.error || "履歴の保存に失敗しました");
+  }
+
+  return data;
+}
+
+export async function syncLoadHistory(): Promise<{ ok: boolean; history: HistoryItem[] }> {
+  const url = getGasUrl();
+  if (!url) {
+    throw new Error("GAS URLが設定されていません。設定画面でURLを入力してください。");
+  }
+
+  const res = await gasPost(url, {
+    action: "sync-history-load",
+  });
+
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  }
+
+  const data = await res.json();
+  if (!data.ok) {
+    throw new Error(data.error || "履歴の読み込みに失敗しました");
   }
 
   return data;
