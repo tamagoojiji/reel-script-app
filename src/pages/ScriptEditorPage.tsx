@@ -40,6 +40,7 @@ export default function ScriptEditorPage() {
 
   const [name, setName] = useState("");
   const [preset, setPreset] = useState("coral");
+  const [background, setBackground] = useState("");
   const [scenes, setScenes] = useState<ScriptScene[]>([newScene()]);
   const [ctaText, setCtaText] = useState("");
   const [ctaExpression, setCtaExpression] = useState<"bow" | "normal">("bow");
@@ -57,6 +58,7 @@ export default function ScriptEditorPage() {
         setScriptId(found.id);
         setName(found.name);
         setPreset(found.preset);
+        setBackground(found.background || "");
         setScenes(found.scenes);
         setCtaText(found.cta?.text || "");
         setCtaExpression((found.cta?.expression as "bow" | "normal") || "bow");
@@ -78,6 +80,7 @@ export default function ScriptEditorPage() {
       id: scriptId,
       name: name || "無題の台本",
       preset,
+      background: background || undefined,
       scenes,
       cta: ctaText ? { text: ctaText, expression: ctaExpression } : undefined,
       createdAt: scripts.find((s) => s.id === scriptId)?.createdAt || now,
@@ -91,7 +94,7 @@ export default function ScriptEditorPage() {
     }
     saveScriptsAndSync(scripts);
     return script;
-  }, [scriptId, name, preset, scenes, ctaText, ctaExpression]);
+  }, [scriptId, name, preset, background, scenes, ctaText, ctaExpression]);
 
   const handleGenerate = async () => {
     const script = save();
@@ -99,6 +102,7 @@ export default function ScriptEditorPage() {
       const result = await generateV2({
         name: script.name,
         preset: script.preset,
+        background: script.background,
         scenes: script.scenes,
         cta: script.cta,
       });
@@ -196,6 +200,18 @@ export default function ScriptEditorPage() {
             {p}
           </button>
         ))}
+      </div>
+
+      {/* Background */}
+      <div className="bg-gray-800 rounded-xl p-4 space-y-2">
+        <span className="text-xs text-gray-500 font-mono">背景（全シーン共通）</span>
+        <input
+          type="text"
+          value={background}
+          onChange={(e) => setBackground(e.target.value)}
+          placeholder="backgrounds/ファイル名.mp4 または .png（任意）"
+          className="w-full bg-gray-900 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        />
       </div>
 
       {/* Scenes */}

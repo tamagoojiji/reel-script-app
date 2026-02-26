@@ -43,6 +43,7 @@ export function overlayUrl(file: string): string {
 export interface GenerateV2Request {
   name: string;
   preset: string;
+  background?: string;
   scenes: ScriptScene[];
   cta?: ScriptCta;
 }

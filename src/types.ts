@@ -47,6 +47,7 @@ export interface Script {
   id: string;
   name: string;
   preset: string;
+  background?: string;
   scenes: ScriptScene[];
   cta?: ScriptCta;
   createdAt: string;
