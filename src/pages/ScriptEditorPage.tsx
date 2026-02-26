@@ -4,7 +4,10 @@ import type { Script, ScriptScene, GenerateStatus } from "../types";
 import SceneCard from "../components/SceneCard";
 import FilePicker from "../components/FilePicker";
 import PipelineStatus from "../components/PipelineStatus";
+import CloudRenderStatusModal from "../components/CloudRenderStatus";
 import { generateV2, getGenerateStatus, uploadBackground } from "../api/reelEditor";
+import { triggerCloudRender, getCloudRenderStatus, downloadArtifact } from "../api/cloudRender";
+import type { CloudRenderStatus } from "../api/cloudRender";
 import { saveToObsidian } from "../api/github";
 import { syncSaveScripts } from "../api/gasApi";
 import { getGasUrl } from "../config";
@@ -47,9 +50,12 @@ export default function ScriptEditorPage() {
   const [ctaExpression, setCtaExpression] = useState<"bow" | "normal">("bow");
   const [scriptId, setScriptId] = useState(generateId());
   const [pipelineStatus, setPipelineStatus] = useState<GenerateStatus | null>(null);
+  const [cloudStatus, setCloudStatus] = useState<CloudRenderStatus | null>(null);
+  const [cloudDownloading, setCloudDownloading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [obsidianMsg, setObsidianMsg] = useState("");
   const pollRef = useRef<ReturnType<typeof setInterval>>();
+  const cloudPollRef = useRef<ReturnType<typeof setInterval>>();
 
   useEffect(() => {
     if (!isNew && id) {
@@ -71,6 +77,7 @@ export default function ScriptEditorPage() {
   useEffect(() => {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
+      if (cloudPollRef.current) clearInterval(cloudPollRef.current);
     };
   }, []);
 
@@ -149,6 +156,62 @@ export default function ScriptEditorPage() {
       setObsidianMsg(`エラー: ${e.message}`);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleCloudGenerate = async () => {
+    const script = save();
+    try {
+      setCloudStatus({
+        status: "queued",
+        conclusion: null,
+        runId: null,
+        artifactUrl: null,
+        htmlUrl: null,
+      });
+      const runId = await triggerCloudRender({
+        name: script.name,
+        preset: script.preset,
+        background: script.background,
+        scenes: script.scenes,
+        cta: script.cta,
+      });
+      setCloudStatus((prev) => prev ? { ...prev, runId, status: "in_progress" } : null);
+
+      cloudPollRef.current = setInterval(async () => {
+        try {
+          const st = await getCloudRenderStatus(runId);
+          setCloudStatus(st);
+          if (st.status === "completed" || st.status === "failure" || st.status === "cancelled") {
+            clearInterval(cloudPollRef.current);
+          }
+        } catch {
+          clearInterval(cloudPollRef.current);
+          setCloudStatus((prev) =>
+            prev ? { ...prev, status: "failure", conclusion: "polling_error" } : null
+          );
+        }
+      }, 10000);
+    } catch (e: any) {
+      setCloudStatus({
+        status: "failure",
+        conclusion: e.message,
+        runId: null,
+        artifactUrl: null,
+        htmlUrl: null,
+      });
+    }
+  };
+
+  const handleCloudDownload = async () => {
+    if (!cloudStatus?.artifactUrl) return;
+    setCloudDownloading(true);
+    try {
+      await downloadArtifact(cloudStatus.artifactUrl);
+    } catch {
+      // ダウンロード失敗
+    } finally {
+      setCloudDownloading(false);
     }
   };
 
@@ -266,6 +329,12 @@ export default function ScriptEditorPage() {
         >
           Generate（パイプライン実行）
         </button>
+        <button
+          onClick={handleCloudGenerate}
+          className="w-full py-3 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl text-sm"
+        >
+          Cloud生成（GitHub Actions）
+        </button>
         <div className="flex gap-2">
           <button
             onClick={() => { save(); navigate("/"); }}
@@ -290,6 +359,14 @@ export default function ScriptEditorPage() {
 
       {/* Pipeline Status Modal */}
       <PipelineStatus status={pipelineStatus} onClose={() => setPipelineStatus(null)} />
+
+      {/* Cloud Render Status Modal */}
+      <CloudRenderStatusModal
+        status={cloudStatus}
+        onClose={() => setCloudStatus(null)}
+        onDownload={handleCloudDownload}
+        downloading={cloudDownloading}
+      />
     </div>
   );
 }
