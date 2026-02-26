@@ -225,9 +225,9 @@ export async function uploadBackgroundToGitHub(file: File): Promise<string> {
     throw new Error("GitHub Tokenが未設定です。Settingsで設定してください。");
   }
 
-  // 動画が大きい場合は圧縮
+  // 動画は常に圧縮（iPhoneの4K/HEVC → 720p/2Mbps に変換）
   let uploadFile = file;
-  if (file.type.startsWith("video/") && file.size > MAX_UPLOAD_MB * 1024 * 1024) {
+  if (file.type.startsWith("video/")) {
     uploadFile = await compressVideo(file);
   }
 
