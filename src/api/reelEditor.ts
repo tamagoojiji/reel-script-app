@@ -67,6 +67,30 @@ export async function getGenerateStatus(): Promise<GenerateStatus> {
   return res.json();
 }
 
+export async function uploadOverlay(file: File): Promise<string> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(url("/api/overlays/upload"), { method: "POST", body: form });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Upload failed" }));
+    throw new Error(err.error || "Upload failed");
+  }
+  const data = await res.json();
+  return data.path;
+}
+
+export async function uploadBackground(file: File): Promise<string> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(url("/api/backgrounds/upload"), { method: "POST", body: form });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Upload failed" }));
+    throw new Error(err.error || "Upload failed");
+  }
+  const data = await res.json();
+  return data.path;
+}
+
 export async function generateAiScript(theme: string): Promise<{
   script: { name: string; preset: string; scenes: ScriptScene[]; cta?: ScriptCta };
 }> {

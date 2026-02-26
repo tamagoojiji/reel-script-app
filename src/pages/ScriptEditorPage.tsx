@@ -2,8 +2,9 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import type { Script, ScriptScene, GenerateStatus } from "../types";
 import SceneCard from "../components/SceneCard";
+import FilePicker from "../components/FilePicker";
 import PipelineStatus from "../components/PipelineStatus";
-import { generateV2, getGenerateStatus } from "../api/reelEditor";
+import { generateV2, getGenerateStatus, uploadBackground } from "../api/reelEditor";
 import { saveToObsidian } from "../api/github";
 import { syncSaveScripts } from "../api/gasApi";
 import { getGasUrl } from "../config";
@@ -203,14 +204,14 @@ export default function ScriptEditorPage() {
       </div>
 
       {/* Background */}
-      <div className="bg-gray-800 rounded-xl p-4 space-y-2">
-        <span className="text-xs text-gray-500 font-mono">背景（全シーン共通）</span>
-        <input
-          type="text"
+      <div className="bg-gray-800 rounded-xl p-4">
+        <FilePicker
           value={background}
-          onChange={(e) => setBackground(e.target.value)}
-          placeholder="backgrounds/ファイル名.mp4 または .png（任意）"
-          className="w-full bg-gray-900 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          onChange={setBackground}
+          onUpload={uploadBackground}
+          accept="image/*,video/*"
+          placeholder="タップして画像/動画を選択（任意）"
+          label="背景（全シーン共通）"
         />
       </div>
 

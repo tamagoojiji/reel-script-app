@@ -2,6 +2,8 @@ import { useState } from "react";
 import type { ScriptScene, Expression } from "../types";
 import { EXPRESSION_LABELS } from "../types";
 import ExpressionPicker from "./ExpressionPicker";
+import FilePicker from "./FilePicker";
+import { uploadOverlay } from "../api/reelEditor";
 
 interface Props {
   index: number;
@@ -85,12 +87,13 @@ export default function SceneCard({ index, scene, onChange, onDelete, onMoveUp, 
       />
 
       {/* Overlay */}
-      <input
-        type="text"
+      <FilePicker
         value={scene.overlay || ""}
-        onChange={(e) => onChange({ ...scene, overlay: e.target.value || undefined })}
-        placeholder="overlays/ファイル名.png（任意）"
-        className="w-full bg-gray-900 rounded-lg px-3 py-2 text-xs text-gray-300 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        onChange={(path) => onChange({ ...scene, overlay: path || undefined })}
+        onUpload={uploadOverlay}
+        accept="image/*"
+        placeholder="タップして画像を選択（任意）"
+        label="オーバーレイ"
       />
     </div>
   );
