@@ -6,7 +6,7 @@ import FilePicker from "../components/FilePicker";
 import PipelineStatus from "../components/PipelineStatus";
 import CloudRenderStatusModal from "../components/CloudRenderStatus";
 import { generateV2, getGenerateStatus, uploadBackground } from "../api/reelEditor";
-import { triggerCloudRender, getCloudRenderStatus, downloadArtifact } from "../api/cloudRender";
+import { triggerCloudRender, getCloudRenderStatus, downloadArtifact, uploadBackgroundToGitHub } from "../api/cloudRender";
 import type { CloudRenderStatus } from "../api/cloudRender";
 import { saveToObsidian } from "../api/github";
 import { syncSaveScripts } from "../api/gasApi";
@@ -215,6 +215,14 @@ export default function ScriptEditorPage() {
     }
   };
 
+  const handleBackgroundUpload = async (file: File): Promise<string> => {
+    try {
+      return await uploadBackground(file);
+    } catch {
+      return await uploadBackgroundToGitHub(file);
+    }
+  };
+
   const updateScene = (index: number, scene: ScriptScene) => {
     setScenes((prev) => prev.map((s, i) => (i === index ? scene : s)));
   };
@@ -271,7 +279,7 @@ export default function ScriptEditorPage() {
         <FilePicker
           value={background}
           onChange={setBackground}
-          onUpload={uploadBackground}
+          onUpload={handleBackgroundUpload}
           accept="image/*,video/*"
           placeholder="タップして画像/動画を選択（任意）"
           label="背景（全シーン共通）"

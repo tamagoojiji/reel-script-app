@@ -131,6 +131,76 @@ export async function getCloudRenderStatus(runId: number): Promise<CloudRenderSt
 }
 
 /**
+ * ArrayBuffer → base64（チャンク処理でスタックオーバーフロー回避）
+ */
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 8192;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
+
+/**
+ * 背景ファイルを remotion リポの public/bg/ に GitHub Contents API でアップロード
+ * 戻り値: "bg/{safeName}"（remotion の public/ 相対パス）
+ */
+const REMOTION_REPO = "tamagoojiji/remotion";
+
+export async function uploadBackgroundToGitHub(file: File): Promise<string> {
+  const { githubToken } = getConfig();
+  if (!githubToken) {
+    throw new Error("GitHub Tokenが未設定です。Settingsで設定してください。");
+  }
+
+  // ファイル名をASCIIセーフに変換
+  const safeName = file.name
+    .normalize("NFD")
+    .replace(/[^\x20-\x7E.]/g, "_")
+    .replace(/\s+/g, "_")
+    .replace(/_+/g, "_");
+
+  const filePath = `public/bg/${safeName}`;
+  const apiUrl = `${API}/repos/${REMOTION_REPO}/contents/${filePath}`;
+
+  // 既存ファイルの sha を取得（上書き対応）
+  let sha: string | undefined;
+  try {
+    const check = await fetch(apiUrl, { headers: headers() });
+    if (check.ok) {
+      const existing = await check.json();
+      sha = existing.sha;
+    }
+  } catch {}
+
+  // ファイル内容を base64 に変換
+  const buffer = await file.arrayBuffer();
+  const content = arrayBufferToBase64(buffer);
+
+  const body: Record<string, string> = {
+    message: `add: background ${safeName}`,
+    content,
+  };
+  if (sha) body.sha = sha;
+
+  const res = await fetch(apiUrl, {
+    method: "PUT",
+    headers: { ...headers(), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`背景アップロード失敗: ${(err as any).message || res.statusText}`);
+  }
+
+  return `bg/${safeName}`;
+}
+
+/**
  * アーティファクト（ZIP）をダウンロード
  */
 export async function downloadArtifact(artifactUrl: string): Promise<void> {
