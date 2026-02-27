@@ -388,12 +388,6 @@ export default function ScriptEditorPage() {
       {/* Action Buttons */}
       <div className="space-y-2">
         <button
-          onClick={handleGenerate}
-          className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm"
-        >
-          Generate（パイプライン実行）
-        </button>
-        <button
           onClick={handleCloudGenerate}
           className="w-full py-3 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl text-sm"
         >
