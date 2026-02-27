@@ -131,93 +131,33 @@ export async function getCloudRenderStatus(runId: number): Promise<CloudRenderSt
 }
 
 /**
- * ArrayBuffer → base64（チャンク処理でスタックオーバーフロー回避）
- */
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  const chunkSize = 8192;
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.subarray(i, i + chunkSize);
-    binary += String.fromCharCode(...chunk);
-  }
-  return btoa(binary);
-}
-
-/**
- * 動画をブラウザ内で圧縮（720p, 2Mbps）
- * Canvas + MediaRecorder で再エンコード
- */
-const MAX_UPLOAD_MB = 50;
-
-function compressVideo(file: File): Promise<File> {
-  return new Promise((resolve, reject) => {
-    const video = document.createElement("video");
-    video.muted = true;
-    video.playsInline = true;
-    video.preload = "auto";
-
-    video.onloadedmetadata = async () => {
-      const maxW = 720;
-      const scale = Math.min(1, maxW / video.videoWidth);
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(video.videoWidth * scale);
-      canvas.height = Math.round(video.videoHeight * scale);
-      const ctx = canvas.getContext("2d")!;
-
-      const stream = canvas.captureStream(30);
-      const mimeType = MediaRecorder.isTypeSupported("video/mp4; codecs=avc1")
-        ? "video/mp4"
-        : "video/webm";
-      const recorder = new MediaRecorder(stream, {
-        mimeType,
-        videoBitsPerSecond: 2_000_000,
-      });
-
-      const chunks: Blob[] = [];
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data);
-      };
-      recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: mimeType });
-        const ext = mimeType.includes("mp4") ? ".mp4" : ".webm";
-        const newName = file.name.replace(/\.[^.]+$/, "") + ext;
-        resolve(new File([blob], newName, { type: mimeType }));
-        URL.revokeObjectURL(video.src);
-      };
-
-      recorder.start(100);
-      const draw = () => {
-        if (!video.ended && !video.paused) {
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          requestAnimationFrame(draw);
-        }
-      };
-      video.onended = () => recorder.stop();
-      video.onplay = draw;
-
-      try {
-        await video.play();
-      } catch {
-        reject(new Error("動画の再生に失敗しました"));
-      }
-    };
-
-    video.onerror = () => {
-      URL.revokeObjectURL(video.src);
-      reject(new Error("動画の読み込みに失敗しました"));
-    };
-    video.src = URL.createObjectURL(file);
-  });
-}
-
-/**
- * 背景ファイルを remotion リポの public/bg/ に Git Data API でアップロード
- * 動画が大きい場合はブラウザ内で圧縮してからアップロード
+ * 背景ファイルを remotion リポの GitHub Releases にアップロード
+ * Releases API はバイナリ直送（base64不要）で最大2GBまで対応
  * 戻り値: "bg/{safeName}"（remotion の public/ 相対パス）
  */
 const REMOTION_REPO = "tamagoojiji/remotion";
-const BRANCH = "main";
+const RELEASE_TAG = "bg-assets";
+
+async function getOrCreateRelease(): Promise<number> {
+  const repoApi = `${API}/repos/${REMOTION_REPO}`;
+  // 既存リリースを検索
+  const res = await fetch(`${repoApi}/releases/tags/${RELEASE_TAG}`, { headers: headers() });
+  if (res.ok) return (await res.json()).id;
+
+  // なければ作成
+  const create = await fetch(`${repoApi}/releases`, {
+    method: "POST",
+    headers: { ...headers(), "Content-Type": "application/json" },
+    body: JSON.stringify({
+      tag_name: RELEASE_TAG,
+      name: "Background Assets",
+      body: "背景ファイル用（PWAからアップロード）",
+      prerelease: true,
+    }),
+  });
+  if (!create.ok) throw new Error("リリース作成に失敗しました");
+  return (await create.json()).id;
+}
 
 export async function uploadBackgroundToGitHub(file: File): Promise<string> {
   const { githubToken } = getConfig();
@@ -225,79 +165,46 @@ export async function uploadBackgroundToGitHub(file: File): Promise<string> {
     throw new Error("GitHub Tokenが未設定です。Settingsで設定してください。");
   }
 
-  // 動画は常に圧縮（iPhoneの4K/HEVC → 720p/2Mbps に変換）
-  let uploadFile = file;
-  if (file.type.startsWith("video/")) {
-    uploadFile = await compressVideo(file);
-  }
-
   // ファイル名をASCIIセーフに変換
-  const safeName = uploadFile.name
+  const safeName = file.name
     .normalize("NFD")
     .replace(/[^\x20-\x7E.]/g, "_")
     .replace(/\s+/g, "_")
     .replace(/_+/g, "_");
 
-  const filePath = `public/bg/${safeName}`;
-  const repoApi = `${API}/repos/${REMOTION_REPO}`;
-  const h = { ...headers(), "Content-Type": "application/json" };
+  const releaseId = await getOrCreateRelease();
 
-  // 1. Blob作成（base64で大容量ファイル対応）
-  const buffer = await uploadFile.arrayBuffer();
-  const content = arrayBufferToBase64(buffer);
-
-  const blobRes = await fetch(`${repoApi}/git/blobs`, {
-    method: "POST",
-    headers: h,
-    body: JSON.stringify({ content, encoding: "base64" }),
-  });
-  if (!blobRes.ok) {
-    const err = await blobRes.json().catch(() => ({}));
-    throw new Error(`Blob作成失敗: ${(err as any).message || blobRes.statusText}`);
+  // 同名アセットがあれば削除（上書き）
+  const assetsRes = await fetch(
+    `${API}/repos/${REMOTION_REPO}/releases/${releaseId}/assets`,
+    { headers: headers() },
+  );
+  if (assetsRes.ok) {
+    const assets = await assetsRes.json();
+    const existing = assets.find((a: any) => a.name === safeName);
+    if (existing) {
+      await fetch(`${API}/repos/${REMOTION_REPO}/releases/assets/${existing.id}`, {
+        method: "DELETE",
+        headers: headers(),
+      });
+    }
   }
-  const blobSha = (await blobRes.json()).sha;
 
-  // 2. 現在のブランチのコミットSHA・ツリーSHAを取得
-  const refRes = await fetch(`${repoApi}/git/ref/heads/${BRANCH}`, { headers: headers() });
-  if (!refRes.ok) throw new Error("ブランチ情報の取得に失敗しました");
-  const commitSha = (await refRes.json()).object.sha;
-
-  const commitRes = await fetch(`${repoApi}/git/commits/${commitSha}`, { headers: headers() });
-  if (!commitRes.ok) throw new Error("コミット情報の取得に失敗しました");
-  const treeSha = (await commitRes.json()).tree.sha;
-
-  // 3. 新しいツリーを作成（ファイルを追加）
-  const treeRes = await fetch(`${repoApi}/git/trees`, {
+  // バイナリ直送でアップロード（base64不要、最大2GB）
+  const uploadUrl = `https://uploads.github.com/repos/${REMOTION_REPO}/releases/${releaseId}/assets?name=${encodeURIComponent(safeName)}`;
+  const uploadRes = await fetch(uploadUrl, {
     method: "POST",
-    headers: h,
-    body: JSON.stringify({
-      base_tree: treeSha,
-      tree: [{ path: filePath, mode: "100644", type: "blob", sha: blobSha }],
-    }),
+    headers: {
+      ...headers(),
+      "Content-Type": file.type || "application/octet-stream",
+    },
+    body: file,
   });
-  if (!treeRes.ok) throw new Error("ツリー作成に失敗しました");
-  const newTreeSha = (await treeRes.json()).sha;
 
-  // 4. 新しいコミットを作成
-  const newCommitRes = await fetch(`${repoApi}/git/commits`, {
-    method: "POST",
-    headers: h,
-    body: JSON.stringify({
-      message: `add: background ${safeName}`,
-      tree: newTreeSha,
-      parents: [commitSha],
-    }),
-  });
-  if (!newCommitRes.ok) throw new Error("コミット作成に失敗しました");
-  const newCommitSha = (await newCommitRes.json()).sha;
-
-  // 5. ブランチを更新
-  const updateRes = await fetch(`${repoApi}/git/refs/heads/${BRANCH}`, {
-    method: "PATCH",
-    headers: h,
-    body: JSON.stringify({ sha: newCommitSha }),
-  });
-  if (!updateRes.ok) throw new Error("ブランチ更新に失敗しました");
+  if (!uploadRes.ok) {
+    const err = await uploadRes.json().catch(() => ({}));
+    throw new Error(`背景アップロード失敗: ${(err as any).message || uploadRes.statusText}`);
+  }
 
   return `bg/${safeName}`;
 }
