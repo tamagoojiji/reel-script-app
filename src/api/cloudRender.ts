@@ -135,11 +135,11 @@ export async function getCloudRenderStatus(runId: number): Promise<CloudRenderSt
  * Releases API はバイナリ直送（base64不要）で最大2GBまで対応
  * 戻り値: "bg/{safeName}"（remotion の public/ 相対パス）
  */
-const REMOTION_REPO = "tamagoojiji/remotion";
+const BG_REPO = REPO; // tamago-talk-reel（publicリポ → CORS問題なし）
 const RELEASE_TAG = "bg-assets";
 
 async function getOrCreateRelease(): Promise<number> {
-  const repoApi = `${API}/repos/${REMOTION_REPO}`;
+  const repoApi = `${API}/repos/${BG_REPO}`;
   // 既存リリースを検索
   const res = await fetch(`${repoApi}/releases/tags/${RELEASE_TAG}`, { headers: headers() });
   if (res.ok) return (await res.json()).id;
@@ -176,14 +176,14 @@ export async function uploadBackgroundToGitHub(file: File): Promise<string> {
 
   // 同名アセットがあれば削除（上書き）
   const assetsRes = await fetch(
-    `${API}/repos/${REMOTION_REPO}/releases/${releaseId}/assets`,
+    `${API}/repos/${BG_REPO}/releases/${releaseId}/assets`,
     { headers: headers() },
   );
   if (assetsRes.ok) {
     const assets = await assetsRes.json();
     const existing = assets.find((a: any) => a.name === safeName);
     if (existing) {
-      await fetch(`${API}/repos/${REMOTION_REPO}/releases/assets/${existing.id}`, {
+      await fetch(`${API}/repos/${BG_REPO}/releases/assets/${existing.id}`, {
         method: "DELETE",
         headers: headers(),
       });
@@ -191,7 +191,7 @@ export async function uploadBackgroundToGitHub(file: File): Promise<string> {
   }
 
   // バイナリ直送でアップロード（base64不要、最大2GB）
-  const uploadUrl = `https://uploads.github.com/repos/${REMOTION_REPO}/releases/${releaseId}/assets?name=${encodeURIComponent(safeName)}`;
+  const uploadUrl = `https://uploads.github.com/repos/${BG_REPO}/releases/${releaseId}/assets?name=${encodeURIComponent(safeName)}`;
   const uploadRes = await fetch(uploadUrl, {
     method: "POST",
     headers: {
