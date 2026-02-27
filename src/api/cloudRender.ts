@@ -145,9 +145,88 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 }
 
 /**
+ * 動画をブラウザ内で圧縮（720p, 2Mbps）
+ * Canvas + MediaRecorder で再エンコード（実時間再生が必要）
+ */
+function compressVideo(file: File): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = "auto";
+
+    const timeout = setTimeout(() => {
+      reject(new Error("圧縮タイムアウト（60秒）"));
+    }, 60000);
+
+    video.onloadedmetadata = async () => {
+      try {
+        const maxW = 720;
+        const scale = Math.min(1, maxW / video.videoWidth);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(video.videoWidth * scale);
+        canvas.height = Math.round(video.videoHeight * scale);
+        const ctx = canvas.getContext("2d")!;
+
+        const stream = canvas.captureStream(30);
+
+        // Safari: video/mp4, Chrome: video/webm
+        const mimeType = MediaRecorder.isTypeSupported("video/mp4")
+          ? "video/mp4"
+          : "video/webm";
+        const recorder = new MediaRecorder(stream, {
+          mimeType,
+          videoBitsPerSecond: 2_000_000,
+        });
+
+        const chunks: Blob[] = [];
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) chunks.push(e.data);
+        };
+
+        recorder.onstop = () => {
+          clearTimeout(timeout);
+          const blob = new Blob(chunks, { type: mimeType });
+          const ext = mimeType.includes("mp4") ? ".mp4" : ".webm";
+          const newName = file.name.replace(/\.[^.]+$/, "") + ext;
+          resolve(new File([blob], newName, { type: mimeType }));
+          URL.revokeObjectURL(video.src);
+        };
+
+        recorder.start(100);
+
+        const draw = () => {
+          if (!video.ended && !video.paused) {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            requestAnimationFrame(draw);
+          }
+        };
+
+        video.onplay = draw;
+        video.onended = () => recorder.stop();
+
+        await video.play();
+      } catch (e: any) {
+        clearTimeout(timeout);
+        URL.revokeObjectURL(video.src);
+        reject(new Error(`圧縮処理失敗: ${e.message}`));
+      }
+    };
+
+    video.onerror = () => {
+      clearTimeout(timeout);
+      URL.revokeObjectURL(video.src);
+      reject(new Error("動画の読み込みに失敗"));
+    };
+
+    video.src = URL.createObjectURL(file);
+  });
+}
+
+/**
  * 背景ファイルを reel-script-app リポに Git Data API でコミット
- * api.github.com のみ使用（CORS OK）、uploads.github.com は使わない
- * Blobs API: 最大100MB（base64込み）→ 実質約75MB
+ * api.github.com のみ使用（CORS OK）
+ * 動画は自動圧縮（720p/2Mbps）してからアップロード
  * 戻り値: "bg/{safeName}"
  */
 const BG_REPO = "tamagoojiji/reel-script-app";
@@ -159,9 +238,19 @@ export async function uploadBackgroundToGitHub(file: File): Promise<string> {
     throw new Error("GitHub Tokenが未設定です。Settingsで設定してください。");
   }
 
-  const sizeMB = (file.size / 1024 / 1024).toFixed(1);
-  if (file.size > 75 * 1024 * 1024) {
-    throw new Error(`ファイルが大きすぎます(${sizeMB}MB)。75MB以下の動画を選択してください`);
+  // 動画は圧縮してからアップロード
+  let uploadFile = file;
+  if (file.type.startsWith("video/") && file.size > 10 * 1024 * 1024) {
+    try {
+      uploadFile = await compressVideo(file);
+    } catch (e: any) {
+      throw new Error(`動画圧縮失敗: ${e.message}。短い動画で再試行してください`);
+    }
+  }
+
+  const sizeMB = (uploadFile.size / 1024 / 1024).toFixed(1);
+  if (uploadFile.size > 75 * 1024 * 1024) {
+    throw new Error(`圧縮後も大きすぎます(${sizeMB}MB)。短い動画を使用してください`);
   }
 
   const safeName = file.name
