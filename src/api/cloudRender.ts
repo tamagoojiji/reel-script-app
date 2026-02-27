@@ -131,33 +131,27 @@ export async function getCloudRenderStatus(runId: number): Promise<CloudRenderSt
 }
 
 /**
- * 背景ファイルを remotion リポの GitHub Releases にアップロード
- * Releases API はバイナリ直送（base64不要）で最大2GBまで対応
- * 戻り値: "bg/{safeName}"（remotion の public/ 相対パス）
+ * ArrayBuffer → base64（チャンク処理でスタックオーバーフロー回避）
  */
-const BG_REPO = "tamagoojiji/reel-script-app"; // publicリポ → CORS問題なし
-const RELEASE_TAG = "bg-assets";
-
-async function getOrCreateRelease(): Promise<number> {
-  const repoApi = `${API}/repos/${BG_REPO}`;
-  // 既存リリースを検索
-  const res = await fetch(`${repoApi}/releases/tags/${RELEASE_TAG}`, { headers: headers() });
-  if (res.ok) return (await res.json()).id;
-
-  // なければ作成
-  const create = await fetch(`${repoApi}/releases`, {
-    method: "POST",
-    headers: { ...headers(), "Content-Type": "application/json" },
-    body: JSON.stringify({
-      tag_name: RELEASE_TAG,
-      name: "Background Assets",
-      body: "背景ファイル用（PWAからアップロード）",
-      prerelease: true,
-    }),
-  });
-  if (!create.ok) throw new Error("リリース作成に失敗しました");
-  return (await create.json()).id;
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 8192;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
 }
+
+/**
+ * 背景ファイルを reel-script-app リポに Git Data API でコミット
+ * api.github.com のみ使用（CORS OK）、uploads.github.com は使わない
+ * Blobs API: 最大100MB（base64込み）→ 実質約75MB
+ * 戻り値: "bg/{safeName}"
+ */
+const BG_REPO = "tamagoojiji/reel-script-app";
+const BG_BRANCH = "main";
 
 export async function uploadBackgroundToGitHub(file: File): Promise<string> {
   const { githubToken } = getConfig();
@@ -165,45 +159,95 @@ export async function uploadBackgroundToGitHub(file: File): Promise<string> {
     throw new Error("GitHub Tokenが未設定です。Settingsで設定してください。");
   }
 
-  // ファイル名をASCIIセーフに変換
+  const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+  if (file.size > 75 * 1024 * 1024) {
+    throw new Error(`ファイルが大きすぎます(${sizeMB}MB)。75MB以下の動画を選択してください`);
+  }
+
   const safeName = file.name
     .normalize("NFD")
     .replace(/[^\x20-\x7E.]/g, "_")
     .replace(/\s+/g, "_")
     .replace(/_+/g, "_");
 
-  const releaseId = await getOrCreateRelease();
+  const filePath = `public/bg/${safeName}`;
+  const repoApi = `${API}/repos/${BG_REPO}`;
+  const h = { ...headers(), "Content-Type": "application/json" };
 
-  // 同名アセットがあれば削除（上書き）
-  const assetsRes = await fetch(
-    `${API}/repos/${BG_REPO}/releases/${releaseId}/assets`,
-    { headers: headers() },
-  );
-  if (assetsRes.ok) {
-    const assets = await assetsRes.json();
-    const existing = assets.find((a: any) => a.name === safeName);
-    if (existing) {
-      await fetch(`${API}/repos/${BG_REPO}/releases/assets/${existing.id}`, {
-        method: "DELETE",
-        headers: headers(),
-      });
-    }
+  // 1. Blob作成
+  const buffer = await file.arrayBuffer();
+  const content = arrayBufferToBase64(buffer);
+
+  let blobRes: Response;
+  try {
+    blobRes = await fetch(`${repoApi}/git/blobs`, {
+      method: "POST",
+      headers: h,
+      body: JSON.stringify({ content, encoding: "base64" }),
+    });
+  } catch (e: any) {
+    throw new Error(`[1]Blob作成接続失敗: ${e.message}`);
+  }
+  if (!blobRes.ok) {
+    const err = await blobRes.json().catch(() => ({}));
+    throw new Error(`[1]Blob作成失敗(${blobRes.status}): ${(err as any).message || ""}`);
+  }
+  const blobSha = (await blobRes.json()).sha;
+
+  // 2. 現在のブランチ情報を取得
+  let commitSha: string;
+  let treeSha: string;
+  try {
+    const refRes = await fetch(`${repoApi}/git/ref/heads/${BG_BRANCH}`, { headers: headers() });
+    if (!refRes.ok) throw new Error(`ref取得失敗(${refRes.status})`);
+    commitSha = (await refRes.json()).object.sha;
+
+    const commitRes = await fetch(`${repoApi}/git/commits/${commitSha}`, { headers: headers() });
+    if (!commitRes.ok) throw new Error(`commit取得失敗(${commitRes.status})`);
+    treeSha = (await commitRes.json()).tree.sha;
+  } catch (e: any) {
+    throw new Error(`[2]ブランチ情報取得失敗: ${e.message}`);
   }
 
-  // バイナリ直送でアップロード（base64不要、最大2GB）
-  const uploadUrl = `https://uploads.github.com/repos/${BG_REPO}/releases/${releaseId}/assets?name=${encodeURIComponent(safeName)}`;
-  const uploadRes = await fetch(uploadUrl, {
-    method: "POST",
-    headers: {
-      ...headers(),
-      "Content-Type": file.type || "application/octet-stream",
-    },
-    body: file,
-  });
+  // 3. 新しいツリーを作成
+  let newTreeSha: string;
+  try {
+    const treeRes = await fetch(`${repoApi}/git/trees`, {
+      method: "POST",
+      headers: h,
+      body: JSON.stringify({
+        base_tree: treeSha,
+        tree: [{ path: filePath, mode: "100644", type: "blob", sha: blobSha }],
+      }),
+    });
+    if (!treeRes.ok) throw new Error(`tree作成失敗(${treeRes.status})`);
+    newTreeSha = (await treeRes.json()).sha;
+  } catch (e: any) {
+    throw new Error(`[3]ツリー作成失敗: ${e.message}`);
+  }
 
-  if (!uploadRes.ok) {
-    const err = await uploadRes.json().catch(() => ({}));
-    throw new Error(`背景アップロード失敗: ${(err as any).message || uploadRes.statusText}`);
+  // 4. コミット作成 + ブランチ更新
+  try {
+    const newCommitRes = await fetch(`${repoApi}/git/commits`, {
+      method: "POST",
+      headers: h,
+      body: JSON.stringify({
+        message: `add: background ${safeName}`,
+        tree: newTreeSha,
+        parents: [commitSha],
+      }),
+    });
+    if (!newCommitRes.ok) throw new Error(`commit作成失敗(${newCommitRes.status})`);
+    const newCommitSha = (await newCommitRes.json()).sha;
+
+    const updateRes = await fetch(`${repoApi}/git/refs/heads/${BG_BRANCH}`, {
+      method: "PATCH",
+      headers: h,
+      body: JSON.stringify({ sha: newCommitSha }),
+    });
+    if (!updateRes.ok) throw new Error(`ref更新失敗(${updateRes.status})`);
+  } catch (e: any) {
+    throw new Error(`[4]コミット失敗: ${e.message}`);
   }
 
   return `bg/${safeName}`;
