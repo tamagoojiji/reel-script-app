@@ -12,6 +12,38 @@ import { saveToObsidian } from "../api/github";
 import { syncSaveScripts } from "../api/gasApi";
 import { getGasUrl } from "../config";
 
+function scriptToYaml(data: {
+  preset: string;
+  background?: string;
+  scenes: ScriptScene[];
+  cta?: { text: string; expression?: string };
+}): string {
+  const lines: string[] = [];
+  lines.push("style: natural");
+  lines.push(`preset: ${data.preset}`);
+  if (data.background) {
+    lines.push(`background: ${data.background}`);
+  }
+  lines.push("scenes:");
+  for (const s of data.scenes) {
+    lines.push(`  - text: ${JSON.stringify(s.text)}`);
+    if (s.expression && s.expression !== "normal") {
+      lines.push(`    expression: ${s.expression}`);
+    }
+    if (s.emphasis && s.emphasis.length > 0) {
+      lines.push(`    emphasis: [${s.emphasis.map((e) => JSON.stringify(e)).join(", ")}]`);
+    }
+  }
+  if (data.cta?.text) {
+    lines.push("cta:");
+    lines.push(`  text: ${JSON.stringify(data.cta.text)}`);
+    if (data.cta.expression && data.cta.expression !== "normal") {
+      lines.push(`  expression: ${data.cta.expression}`);
+    }
+  }
+  return lines.join("\n") + "\n";
+}
+
 const SCRIPTS_KEY = "reel-scripts";
 
 function loadScripts(): Script[] {
@@ -219,8 +251,32 @@ export default function ScriptEditorPage() {
     try {
       return await uploadBackground(file);
     } catch {
-      return await uploadBackgroundToGitHub(file);
+      // ローカルサーバー失敗 → GitHub Releases にフォールバック
+      // ここでのエラーはそのまま伝播させる（"Failed to fetch" に隠さない）
+      try {
+        return await uploadBackgroundToGitHub(file);
+      } catch (ghErr: any) {
+        throw new Error(`GitHub: ${ghErr.message || "アップロード失敗"}`);
+      }
     }
+  };
+
+  const handleYamlDownload = () => {
+    const script = save();
+    const yaml = scriptToYaml({
+      preset: script.preset,
+      background: script.background,
+      scenes: script.scenes,
+      cta: script.cta,
+    });
+    const filename = (script.name || "script").replace(/[^a-zA-Z0-9\u3000-\u9fff]/g, "_") + ".yaml";
+    const blob = new Blob([yaml], { type: "text/yaml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const updateScene = (index: number, scene: ScriptScene) => {
@@ -349,6 +405,12 @@ export default function ScriptEditorPage() {
             className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 text-gray-200 font-bold rounded-xl text-sm"
           >
             保存
+          </button>
+          <button
+            onClick={handleYamlDownload}
+            className="flex-1 py-3 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded-xl text-sm"
+          >
+            YAML DL
           </button>
           <button
             onClick={handleSaveObsidian}
