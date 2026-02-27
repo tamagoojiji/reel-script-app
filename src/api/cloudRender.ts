@@ -135,7 +135,7 @@ export async function getCloudRenderStatus(runId: number): Promise<CloudRenderSt
  * Releases API はバイナリ直送（base64不要）で最大2GBまで対応
  * 戻り値: "bg/{safeName}"（remotion の public/ 相対パス）
  */
-const BG_REPO = REPO; // tamago-talk-reel（publicリポ → CORS問題なし）
+const BG_REPO = "tamagoojiji/reel-script-app"; // publicリポ → CORS問題なし
 const RELEASE_TAG = "bg-assets";
 
 async function getOrCreateRelease(): Promise<number> {
