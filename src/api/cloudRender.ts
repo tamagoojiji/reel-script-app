@@ -240,20 +240,26 @@ export async function uploadBackgroundToGitHub(file: File): Promise<string> {
 
   // 動画は圧縮してからアップロード
   let uploadFile = file;
+  const origMB = (file.size / 1024 / 1024).toFixed(1);
+
   if (file.type.startsWith("video/") && file.size > 10 * 1024 * 1024) {
     try {
       uploadFile = await compressVideo(file);
+      const compMB = (uploadFile.size / 1024 / 1024).toFixed(1);
+      console.log(`[bg] 圧縮完了: ${origMB}MB → ${compMB}MB`);
     } catch (e: any) {
-      throw new Error(`動画圧縮失敗: ${e.message}。短い動画で再試行してください`);
+      throw new Error(`圧縮失敗(元${origMB}MB, type:${file.type}): ${e.message}`);
     }
+  } else {
+    console.log(`[bg] 圧縮スキップ: ${origMB}MB, type:${file.type}`);
   }
 
   const sizeMB = (uploadFile.size / 1024 / 1024).toFixed(1);
   if (uploadFile.size > 75 * 1024 * 1024) {
-    throw new Error(`圧縮後も大きすぎます(${sizeMB}MB)。短い動画を使用してください`);
+    throw new Error(`圧縮後も大きすぎます(${origMB}MB→${sizeMB}MB)。短い動画を使用してください`);
   }
 
-  const safeName = file.name
+  const safeName = uploadFile.name
     .normalize("NFD")
     .replace(/[^\x20-\x7E.]/g, "_")
     .replace(/\s+/g, "_")
@@ -264,7 +270,7 @@ export async function uploadBackgroundToGitHub(file: File): Promise<string> {
   const h = { ...headers(), "Content-Type": "application/json" };
 
   // 1. Blob作成
-  const buffer = await file.arrayBuffer();
+  const buffer = await uploadFile.arrayBuffer();
   const content = arrayBufferToBase64(buffer);
 
   let blobRes: Response;
@@ -275,7 +281,7 @@ export async function uploadBackgroundToGitHub(file: File): Promise<string> {
       body: JSON.stringify({ content, encoding: "base64" }),
     });
   } catch (e: any) {
-    throw new Error(`[1]Blob作成接続失敗: ${e.message}`);
+    throw new Error(`[1]Blob失敗(${sizeMB}MB): ${e.message}`);
   }
   if (!blobRes.ok) {
     const err = await blobRes.json().catch(() => ({}));
