@@ -5,8 +5,8 @@ import TemplateSelector from "../components/TemplateSelector";
 import TargetCheckbox from "../components/TargetCheckbox";
 import { generateScript, syncSaveHistory } from "../api/gasApi";
 import { getGasUrl } from "../config";
-import type { HistoryItem, TemplateType, TargetPlatform, GeneratedScript } from "../types";
-import { TEMPLATE_INFO } from "../types";
+import type { HistoryItem, TemplateType, TargetPlatform, GeneratedScript, VoicePreset } from "../types";
+import { TEMPLATE_INFO, VOICE_PRESETS, VOICE_PRESET_LABELS } from "../types";
 
 const MEMO_KEY = "reel-create-memo";
 
@@ -20,6 +20,7 @@ export default function CreatePage() {
   const [generated, setGenerated] = useState(false);
   const [lastResultId, setLastResultId] = useState("");
   const [lastTemplate, setLastTemplate] = useState<TemplateType | "">("");
+  const [voicePreset, setVoicePreset] = useState<VoicePreset>("shimmer");
 
   // 入力が変わるたびにlocalStorageに保存
   useEffect(() => {
@@ -46,7 +47,9 @@ export default function CreatePage() {
     try {
       const res = await generateScript(transcript, template, targets);
       if (res.script && res.yaml) {
-        const id = saveToHistory(res.script, res.yaml, transcript, template, targets);
+        // YAMLのpreset行を選択したボイスに差し替え
+        const yamlWithPreset = res.yaml.replace(/^preset:\s*\w+$/m, `preset: ${voicePreset}`);
+        const id = saveToHistory(res.script, yamlWithPreset, transcript, template, targets);
         setGenerated(true);
         setLastResultId(id);
         setLastTemplate(template);
@@ -64,6 +67,27 @@ export default function CreatePage() {
 
       <TargetCheckbox value={targets} onChange={setTargets} />
       <TemplateSelector value={template} onChange={setTemplate} />
+
+      {/* Voice Preset */}
+      <div className="space-y-2">
+        <h2 className="text-sm font-bold text-gray-400">ボイス</h2>
+        <div className="flex gap-2">
+          {VOICE_PRESETS.map((p) => (
+            <button
+              key={p}
+              onClick={() => setVoicePreset(p)}
+              className={`px-3 py-2 rounded-lg text-xs font-bold transition-colors ${
+                voicePreset === p
+                  ? "bg-indigo-600 text-white"
+                  : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+              }`}
+            >
+              {VOICE_PRESET_LABELS[p]}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <VoiceInput value={transcript} onChange={setTranscript} />
 
       {error && (
