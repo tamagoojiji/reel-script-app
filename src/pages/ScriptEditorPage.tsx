@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import type { Script, ScriptScene, GenerateStatus } from "../types";
+import type { Script, ScriptScene, GenerateStatus, VoicePreset } from "../types";
+import { VOICE_PRESETS, VOICE_PRESET_LABELS } from "../types";
 import SceneCard from "../components/SceneCard";
 import FilePicker from "../components/FilePicker";
 import PipelineStatus from "../components/PipelineStatus";
@@ -75,7 +76,7 @@ export default function ScriptEditorPage() {
   const isNew = id === "new";
 
   const [name, setName] = useState("");
-  const [preset, setPreset] = useState("coral");
+  const [preset, setPreset] = useState<VoicePreset>("shimmer");
   const [background, setBackground] = useState("");
   const [scenes, setScenes] = useState<ScriptScene[]>([newScene()]);
   const [ctaText, setCtaText] = useState("");
@@ -96,7 +97,7 @@ export default function ScriptEditorPage() {
       if (found) {
         setScriptId(found.id);
         setName(found.name);
-        setPreset(found.preset);
+        setPreset((VOICE_PRESETS.includes(found.preset as VoicePreset) ? found.preset : "shimmer") as VoicePreset);
         setBackground(found.background || "");
         setScenes(found.scenes);
         setCtaText(found.cta?.text || "");
@@ -315,19 +316,22 @@ export default function ScriptEditorPage() {
         />
       </div>
 
-      {/* Preset */}
-      <div className="flex gap-2">
-        {["coral", "nova"].map((p) => (
-          <button
-            key={p}
-            onClick={() => setPreset(p)}
-            className={`px-4 py-2 rounded-lg text-sm font-bold ${
-              preset === p ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400"
-            }`}
-          >
-            {p}
-          </button>
-        ))}
+      {/* Voice Preset */}
+      <div className="flex flex-col gap-2">
+        <span className="text-xs text-gray-500">ボイス</span>
+        <div className="flex gap-2">
+          {VOICE_PRESETS.map((p) => (
+            <button
+              key={p}
+              onClick={() => setPreset(p)}
+              className={`px-4 py-2 rounded-lg text-sm font-bold ${
+                preset === p ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400"
+              }`}
+            >
+              {VOICE_PRESET_LABELS[p]}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Background */}
