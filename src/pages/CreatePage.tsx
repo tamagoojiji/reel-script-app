@@ -20,7 +20,7 @@ export default function CreatePage() {
   const [generated, setGenerated] = useState(false);
   const [lastResultId, setLastResultId] = useState("");
   const [lastTemplate, setLastTemplate] = useState<TemplateType | "">("");
-  const [voicePreset, setVoicePreset] = useState<VoicePreset>("shimmer");
+  const [voicePreset, setVoicePreset] = useState<VoicePreset>("coral");
 
   // 入力が変わるたびにlocalStorageに保存
   useEffect(() => {

@@ -32,7 +32,7 @@ export const EXPRESSION_LABELS: Record<Expression, string> = {
 
 export type VoicePreset = "shimmer" | "nova" | "coral";
 
-export const VOICE_PRESETS: VoicePreset[] = ["shimmer", "nova", "coral"];
+export const VOICE_PRESETS: VoicePreset[] = ["coral", "shimmer", "nova"];
 
 export const VOICE_PRESET_LABELS: Record<VoicePreset, string> = {
   shimmer: "🎀 かわいい女の子",

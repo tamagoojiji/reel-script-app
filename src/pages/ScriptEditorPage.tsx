@@ -76,7 +76,7 @@ export default function ScriptEditorPage() {
   const isNew = id === "new";
 
   const [name, setName] = useState("");
-  const [preset, setPreset] = useState<VoicePreset>("shimmer");
+  const [preset, setPreset] = useState<VoicePreset>("coral");
   const [background, setBackground] = useState("");
   const [scenes, setScenes] = useState<ScriptScene[]>([newScene()]);
   const [ctaText, setCtaText] = useState("");
@@ -97,7 +97,7 @@ export default function ScriptEditorPage() {
       if (found) {
         setScriptId(found.id);
         setName(found.name);
-        setPreset((VOICE_PRESETS.includes(found.preset as VoicePreset) ? found.preset : "shimmer") as VoicePreset);
+        setPreset((VOICE_PRESETS.includes(found.preset as VoicePreset) ? found.preset : "coral") as VoicePreset);
         setBackground(found.background || "");
         setScenes(found.scenes);
         setCtaText(found.cta?.text || "");
