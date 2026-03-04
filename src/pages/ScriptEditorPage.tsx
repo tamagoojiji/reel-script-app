@@ -335,15 +335,35 @@ export default function ScriptEditorPage() {
       </div>
 
       {/* Background */}
-      <div className="bg-gray-800 rounded-xl p-4">
-        <FilePicker
-          value={background}
-          onChange={setBackground}
-          onUpload={handleBackgroundUpload}
-          accept="image/*,video/*"
-          placeholder="タップして画像/動画を選択（任意）"
-          label="背景（全シーン共通）"
-        />
+      <div className="bg-gray-800 rounded-xl p-4 space-y-3">
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-500 font-mono">背景（全シーン共通）</span>
+          <button
+            onClick={() => setBackground(background === "greenscreen" ? "" : "greenscreen")}
+            className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
+              background === "greenscreen"
+                ? "bg-green-500 text-white"
+                : "bg-gray-700 text-gray-400 hover:bg-gray-600"
+            }`}
+          >
+            グリーンバック
+          </button>
+        </div>
+        {background === "greenscreen" ? (
+          <div className="flex items-center gap-2 px-3 py-2 bg-green-900/30 border border-green-700 rounded-lg">
+            <div className="w-5 h-5 rounded bg-[#00FF00] flex-shrink-0" />
+            <span className="text-xs text-green-300">CapCutクロマキーで背景透過できます</span>
+          </div>
+        ) : (
+          <FilePicker
+            value={background}
+            onChange={setBackground}
+            onUpload={handleBackgroundUpload}
+            accept="image/*,video/*"
+            placeholder="タップして画像/動画を選択（任意）"
+            label=""
+          />
+        )}
       </div>
 
       {/* Scenes */}
