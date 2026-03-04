@@ -33,7 +33,7 @@ export default function FilePicker({ value, onChange, onUpload, accept, placehol
       onChange(path);
     } catch (err: any) {
       const msg = err.message || "アップロード失敗";
-      if (msg === "Failed to fetch") {
+      if (msg === "Failed to fetch" || msg === "Load failed") {
         setError("サーバー未接続。✏️で手入力してください");
       } else {
         setError(msg);
